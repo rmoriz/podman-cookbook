@@ -1,0 +1,407 @@
+---
+driver:
+  name: vagrant
+  customize:
+    memory: 2048
+    cpus: 2
+
+provisioner:
+  name: chef_infra
+  product_name: <%= ENV['CHEF_PRODUCT_NAME'] || 'cinc' %>
+  product_version: <%= ENV['CHEF_VERSION'] || 'latest' %>
+  enforce_idempotency: true
+  multiple_converge: 2
+  deprecations_as_errors: true
+
+verifier:
+  name: inspec
+
+platforms:
+  - name: almalinux-9
+  - name: almalinux-10
+  - name: amazonlinux-2023
+  - name: centos-stream-9
+  - name: centos-stream-10
+  - name: debian-12
+  - name: debian-13
+  - name: fedora-42
+  - name: fedora-43
+  - name: opensuse-leap-15
+  - name: opensuse-leap-16
+  - name: oraclelinux-9
+  - name: oraclelinux-10
+  - name: rockylinux-9
+  - name: rockylinux-10
+  - name: ubuntu-24.04
+  - name: ubuntu-26.04
+  - name: ubuntu-26.10
+
+suites:
+  - name: default
+    provisioner:
+      named_run_list: default
+    run_list:
+      - recipe[test::default]
+    verifier:
+      inspec_tests:
+        - test/integration/default
+  - name: resources
+    provisioner:
+      named_run_list: resources
+      # The recipes pull, save and push images, which have no comparable
+      # state and always report changes.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::container]
+      - recipe[test::image]
+      - recipe[test::exec]
+      - recipe[test::pod]
+      - recipe[test::secret]
+      - recipe[test::quadlet]
+      - recipe[test::prune]
+    verifier:
+      inspec_tests:
+        - test/integration/resources
+  - name: network
+    provisioner:
+      named_run_list: network
+      # The recipe connects and disconnects the container on every run,
+      # so it always reports changes.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::default]
+      - recipe[test::network]
+      - recipe[test::network_lifecycle]
+      - recipe[test::network_aux]
+    verifier:
+      inspec_tests:
+        - test/integration/network
+        - test/integration/network_aux
+  - name: generate-systemd
+    provisioner:
+      named_run_list: generate-systemd
+    run_list:
+      - recipe[test::default]
+      - recipe[test::generate_systemd]
+    verifier:
+      inspec_tests:
+        - test/integration/generate_systemd
+  - name: generate-systemd-user
+    provisioner:
+      named_run_list: generate-systemd-user
+    run_list:
+      - recipe[test::default]
+      - recipe[test::generate_systemd_user]
+    verifier:
+      inspec_tests:
+        - test/integration/generate_systemd_user
+  - name: volume
+    provisioner:
+      named_run_list: volume
+      # The recipe creates and removes (or starts and stops) its object, so it
+      # always reports changes on a second run.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::default]
+      - recipe[test::volume]
+    verifier:
+      inspec_tests:
+        - test/integration/volume
+  - name: kube
+    provisioner:
+      named_run_list: kube
+      # The recipe plays and tears down a manifest, which have no comparable
+      # state and always report changes.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::default]
+      - recipe[test::kube]
+    verifier:
+      inspec_tests:
+        - test/integration/kube
+  - name: registry
+    provisioner:
+      named_run_list: registry
+    run_list:
+      - recipe[test::default]
+      - recipe[test::registry]
+    verifier:
+      inspec_tests:
+        - test/integration/registry
+  - name: misc
+    provisioner:
+      named_run_list: misc
+      # The recipe plays a manifest, which always reports a change.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::default]
+      - recipe[test::misc]
+    verifier:
+      inspec_tests:
+        - test/integration/misc
+  - name: service-tls
+    provisioner:
+      named_run_list: service-tls
+    run_list:
+      - recipe[test::default]
+      - recipe[test::service_tls]
+    verifier:
+      inspec_tests:
+        - test/integration/service_tls
+
+  - name: service-tls-systemd
+    provisioner:
+      named_run_list: service-tls-systemd
+    run_list:
+      - recipe[test::default]
+      - recipe[test::service_tls_systemd]
+    verifier:
+      inspec_tests:
+        - test/integration/service_tls
+
+  - name: service-base
+    provisioner:
+      named_run_list: service-base
+    run_list:
+      - recipe[test::default]
+      - recipe[test::service_base]
+    verifier:
+      inspec_tests:
+        - test/integration/service_base
+  - name: tag
+    provisioner:
+      named_run_list: tag
+    run_list:
+      - recipe[test::default]
+      - recipe[test::tag]
+    verifier:
+      inspec_tests:
+        - test/integration/tag
+  - name: quadlet-missing
+    provisioner:
+      named_run_list: quadlet-missing
+    run_list:
+      - recipe[test::default]
+      - recipe[test::quadlet_missing]
+    verifier:
+      inspec_tests:
+        - test/integration/quadlet_missing
+  - name: execute-user
+    provisioner:
+      named_run_list: execute-user
+    run_list:
+      - recipe[test::execute_user]
+    verifier:
+      inspec_tests:
+        - test/integration/execute_user
+  - name: machine
+    provisioner:
+      named_run_list: machine
+    run_list:
+      - recipe[test::default]
+      - recipe[test::machine]
+    verifier:
+      inspec_tests:
+        - test/integration/machine
+  - name: machine-lifecycle
+    provisioner:
+      named_run_list: machine-lifecycle
+      # The recipe removes the machine again, so a second run has to create it
+      # anew.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::default]
+      - recipe[test::machine_lifecycle]
+    verifier:
+      inspec_tests:
+        - test/integration/machine_lifecycle
+  - name: install-script
+    provisioner:
+      named_run_list: install-script
+      # The recipe deletes a pre-installed Podman first, so it reinstalls on
+      # every run.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::install_script]
+    verifier:
+      inspec_tests:
+        - test/integration/install_script
+  - name: install-script-delete
+    provisioner:
+      named_run_list: install-script-delete
+    run_list:
+      - recipe[test::install_script_delete]
+    verifier:
+      inspec_tests:
+        - test/integration/install_script_delete
+  - name: install-tarball
+    provisioner:
+      named_run_list: install-tarball
+    run_list:
+      - recipe[test::install_tarball]
+    verifier:
+      inspec_tests:
+        - test/integration/install_tarball
+  - name: install-tarball-delete
+    provisioner:
+      named_run_list: install-tarball-delete
+    run_list:
+      - recipe[test::install_tarball_delete]
+    verifier:
+      inspec_tests:
+        - test/integration/install_tarball_delete
+  - name: install-package-delete
+    provisioner:
+      named_run_list: install-package-delete
+    run_list:
+      - recipe[test::install_package_delete]
+    verifier:
+      inspec_tests:
+        - test/integration/install_package_delete
+
+  - name: image-build
+    provisioner:
+      named_run_list: image-build
+      # The recipe builds an image on every run, which always reports
+      # changes.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::image_build]
+    verifier:
+      inspec_tests:
+        - test/integration/image_build
+  - name: image-pull
+    provisioner:
+      named_run_list: image-pull
+    run_list:
+      - recipe[test::default]
+      - recipe[test::image_pull]
+    verifier:
+      inspec_tests:
+        - test/integration/image_pull
+  - name: container-healthcheck
+    provisioner:
+      named_run_list: container-healthcheck
+    run_list:
+      - recipe[test::default]
+      - recipe[test::container_healthcheck]
+    verifier:
+      inspec_tests:
+        - test/integration/container_healthcheck
+  - name: container-env-file
+    provisioner:
+      named_run_list: container-env-file
+    run_list:
+      - recipe[test::default]
+      - recipe[test::container_env_file]
+    verifier:
+      inspec_tests:
+        - test/integration/container_env_file
+  - name: container-attach
+    provisioner:
+      named_run_list: container-attach
+    run_list:
+      - recipe[test::default]
+      - recipe[test::container_attach]
+    verifier:
+      inspec_tests:
+        - test/integration/container_attach
+  - name: container-export
+    provisioner:
+      named_run_list: container-export
+    run_list:
+      - recipe[test::default]
+      - recipe[test::container_export]
+    verifier:
+      inspec_tests:
+        - test/integration/container_export
+  - name: container-network
+    provisioner:
+      named_run_list: container-network
+    run_list:
+      - recipe[test::default]
+      - recipe[test::container_network]
+    verifier:
+      inspec_tests:
+        - test/integration/container_network
+  - name: pod-options
+    provisioner:
+      named_run_list: pod-options
+    run_list:
+      - recipe[test::default]
+      - recipe[test::pod_policy]
+      - recipe[test::pod_flags]
+    verifier:
+      inspec_tests:
+        - test/integration/pod_policy
+        - test/integration/pod_flags
+  - name: kube-generate
+    provisioner:
+      named_run_list: kube-generate
+    run_list:
+      - recipe[test::default]
+      - recipe[test::kube_generate]
+    verifier:
+      inspec_tests:
+        - test/integration/kube_generate
+  - name: kube-options
+    provisioner:
+      named_run_list: kube-options
+      # The recipe plays a manifest, which has no comparable state and always
+      # reports changes.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::default]
+      - recipe[test::kube_options]
+    verifier:
+      inspec_tests:
+        - test/integration/kube_options
+  - name: systemd-user
+    provisioner:
+      named_run_list: systemd-user
+    run_list:
+      - recipe[test::default]
+      - recipe[test::systemd_user]
+    verifier:
+      inspec_tests:
+        - test/integration/systemd_user
+  - name: systemd-user-mode-only
+    provisioner:
+      named_run_list: systemd-user-mode-only
+    run_list:
+      - recipe[test::default]
+      - recipe[test::systemd_user_mode_only]
+    verifier:
+      inspec_tests:
+        - test/integration/systemd_user_mode_only
+  - name: install-package
+    provisioner:
+      named_run_list: install-package
+    run_list:
+      - recipe[test::install_package]
+    verifier:
+      inspec_tests:
+        - test/integration/install_package
+  - name: install-and-stop
+    provisioner:
+      named_run_list: install-and-stop
+      # The recipe creates and removes (or starts and stops) its object, so it
+      # always reports changes on a second run.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::install_and_stop]
+    verifier:
+      inspec_tests:
+        - test/integration/install_and_stop
+
+  - name: smoke
+    provisioner:
+      named_run_list: smoke
+      # The recipe removes its container again, so the second run always
+      # creates it anew and cannot be idempotent.
+      enforce_idempotency: false
+    run_list:
+      - recipe[test::smoke]
+    verifier:
+      inspec_tests:
+        - test/integration/smoke

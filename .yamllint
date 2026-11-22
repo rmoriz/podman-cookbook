@@ -1,0 +1,13 @@
+---
+extends: default
+
+ignore: |
+  test/integration/**/inspec.yml
+  .github/**
+  vendor/**
+
+rules:
+  line-length:
+    max: 200
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']

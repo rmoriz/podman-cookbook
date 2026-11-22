@@ -1,0 +1,74 @@
+# Managed by Chef - do not edit by hand
+<% containers_conf = @resource.dns || @resource.dns_search || @resource.log_driver || @resource.log_opts || @resource.env_vars || @resource.default_ulimit || @resource.bridge || @resource.userns_remap || !@resource.selinux_enabled.nil? %>
+<% if containers_conf %>
+[containers]
+<% if @resource.dns %>
+dns_servers = [<%= @resource.dns.map { |value| "\"#{value}\"" }.join(', ') %>]
+<% end %>
+<% if @resource.dns_search %>
+dns_searches = [<%= @resource.dns_search.map { |value| "\"#{value}\"" }.join(', ') %>]
+<% end %>
+<% if @resource.log_driver %>
+log_driver = "<%= @resource.log_driver %>"
+<% end %>
+<% unless @resource.selinux_enabled.nil? %>
+label = <%= @resource.selinux_enabled %>
+<% end %>
+<% if @log_size_max %>
+log_size_max = <%= @log_size_max %>
+<% end %>
+<% if @resource.env_vars && !@resource.env_vars.empty? %>
+env = [<%= @resource.env_vars.map { |key, value| "\"#{key}=#{value}\"" }.join(', ') %>]
+<% end %>
+<% if @resource.default_ulimit %>
+default_ulimits = [<%= @resource.default_ulimit.map { |limit| "\"#{limit}\"" }.join(', ') %>]
+<% end %>
+<% if @resource.bridge %>
+netns = "<%= @resource.bridge %>"
+<% end %>
+<% if @resource.userns_remap %>
+userns = "<%= @resource.userns_remap %>"
+<% end %>
+<% end %>
+<% engine_env = [] %>
+<% engine_env << "HTTP_PROXY=#{@resource.http_proxy}" if @resource.http_proxy %>
+<% engine_env << "HTTPS_PROXY=#{@resource.https_proxy}" if @resource.https_proxy %>
+<% engine_env << "NO_PROXY=#{@resource.no_proxy}" if @resource.no_proxy %>
+<% engine_env << "TMPDIR=#{@resource.tmpdir}" if @resource.tmpdir %>
+<% runtimes = @resource.runtimes || {} %>
+<% engine_conf = @resource.cgroup_manager || @resource.runtime || @resource.service_timeout || !engine_env.empty? || !runtimes.empty? %>
+<% if engine_conf %>
+[engine]
+<% if @resource.cgroup_manager %>
+cgroup_manager = "<%= @resource.cgroup_manager %>"
+<% end %>
+<% if @resource.runtime %>
+runtime = "<%= @resource.runtime %>"
+<% end %>
+<% if @resource.service_timeout %>
+service_timeout = <%= @resource.service_timeout %>
+<% end %>
+<% unless engine_env.empty? %>
+env = [<%= engine_env.map { |value| "\"#{value}\"" }.join(', ') %>]
+<% end %>
+<% unless runtimes.empty? %>
+[engine.runtimes]
+<% runtimes.each do |name, paths| %>
+<%= name %> = [<%= paths.map { |path| "\"#{path}\"" }.join(', ') %>]
+<% end %>
+<% end %>
+<% end %>
+<% network_conf = @resource.bip || @resource.fixed_cidr || @resource.default_ip_address_pool || @resource.iptables == false || @resource.ip6tables == false %>
+<% if network_conf %>
+[network]
+<% if @resource.default_ip_address_pool %>
+default_subnet = "<%= @resource.default_ip_address_pool %>"
+<% elsif @resource.fixed_cidr %>
+default_subnet = "<%= @resource.fixed_cidr %>"
+<% elsif @resource.bip %>
+default_subnet = "<%= @resource.bip %>"
+<% end %>
+<% if @resource.iptables == false || @resource.ip6tables == false %>
+firewall_driver = "none"
+<% end %>
+<% end %>

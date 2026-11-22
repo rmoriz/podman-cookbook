@@ -1,0 +1,195 @@
+---
+name: ci
+
+"on":
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-unit:
+    uses: sous-chefs/.github/.github/workflows/lint-unit.yml@9.0.1
+    permissions:
+      contents: read
+      actions: write
+      checks: write
+      pull-requests: write
+      statuses: write
+      issues: write
+
+  integration:
+    needs: lint-unit
+    name: integration (${{ matrix.label }})
+    # A hung suite must not hold the runner for the default six hours. The
+    # `machine` group needs more because it downloads a VM image and has to boot
+    # it without hardware virtualization. The `container` and `pod` groups pull
+    # images from Docker Hub, whose rate on a shared runner varies a lot.
+    timeout-minutes: ${{ matrix.timeout }}
+    # ubuntu-latest moves to 26.04 in November 2026; pin the tested image.
+    runs-on: ubuntu-24.04
+    strategy:
+      # The suites are grouped by resource family: one runner installs Podman
+      # once and then converges the recipes that share setup, instead of paying
+      # the runner and install cost for every single recipe.
+      #
+      # CI does not run the full platform list. Each group runs on one of
+      # Debian, Ubuntu or Rocky instead, and only installation runs on all
+      # three. The Exec driver always converges the runner itself, the platform
+      # in the instance name only decides which platform data Chef reports.
+      #
+      # Kitchen strips the dot from a platform version, so the instance is
+      # called `...-ubuntu-2404` while the platform name stays `ubuntu-24.04`.
+      matrix:
+        include:
+          - label: container (ubuntu)
+            platform: ubuntu-2404
+            timeout: 45
+            # `resources` recreates containers the other suites create, so it
+            # runs before the network suite, whose member container joins the
+            # `hello-world` network namespace and would block its removal.
+            suites: default,resources,container-attach,container-env-file,container-export,container-healthcheck,container-network,tag,volume
+          - label: image (debian)
+            platform: debian-13
+            timeout: 30
+            suites: image-build,image-pull,registry
+          - label: network (ubuntu)
+            platform: ubuntu-2404
+            timeout: 30
+            suites: network
+          - label: pod (rocky)
+            platform: rockylinux-10
+            timeout: 45
+            suites: pod-options,kube,kube-generate,kube-options,misc
+          - label: service (debian)
+            platform: debian-13
+            timeout: 30
+            suites: service-base,service-tls,service-tls-systemd
+          - label: systemd (debian)
+            platform: debian-13
+            timeout: 30
+            suites: systemd-user,execute-user,generate-systemd,generate-systemd-user,quadlet-missing
+          - label: install (debian)
+            platform: debian-13
+            timeout: 30
+            suites: install-package,install-package-delete,install-tarball,install-tarball-delete,install-script,install-script-delete,install-and-stop
+          - label: install (rocky)
+            platform: rockylinux-10
+            timeout: 30
+            suites: install-package,install-package-delete,install-tarball,install-tarball-delete,install-script,install-script-delete,install-and-stop
+          - label: install (ubuntu)
+            platform: ubuntu-2404
+            timeout: 30
+            suites: install-package,install-package-delete,install-tarball,install-tarball-delete,install-script,install-script-delete,install-and-stop
+          - label: machine (ubuntu)
+            platform: ubuntu-2404
+            timeout: 60
+            suites: machine
+      fail-fast: false
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Install Cinc Workstation
+        uses: sous-chefs/.github/.github/actions/install-workstation@9.0.1
+
+      # The runner images ship no Podman and their apt lists are empty. Podman
+      # comes from the distribution repository, the same package the cookbook
+      # installs by default: the current static build from GitHub leaves the CLI
+      # waiting in a signal loop after an attached or exec session on these
+      # runners, so every later call that touches the container hangs too.
+      - name: Install Podman
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y podman crun conmon podman-docker
+          sudo mkdir -p /etc/containers/containers.conf.d
+          # With the journal log driver every container exit hands its cleanup
+          # command `--syslog`, and a failing cleanup makes Podman wait out the
+          # full exit timeout. File logging keeps containers working. Drop-ins
+          # are read in file name order with the last one winning, hence the 99
+          # prefix: it also overrides the `journald` the service suites write
+          # into their own 90- drop-in.
+          printf '[containers]\nlog_driver = "k8s-file"\n' | sudo tee /etc/containers/containers.conf.d/99-podman-ci-logging.conf
+          # The distribution Podman trips over an existing pod cgroup slice on
+          # systemd when a pod member starts. cgroupfs avoids that; the 00
+          # prefix lets a suite that exercises the systemd cgroup manager
+          # override it with its own (later sorting) drop-in.
+          printf '[engine]\ncgroup_manager = "cgroupfs"\n' | sudo tee /etc/containers/containers.conf.d/00-podman-ci-cgroup.conf
+
+          # Podman runs a cleanup command on every container exit and hands it
+          # `--syslog` when the host logs to the journal. Without /dev/log that
+          # cleanup dies and every exit stalls for the full 20s exit timeout.
+          sudo ln -sf /run/systemd/journal/dev-log /dev/log
+
+          # `podman machine` needs gvproxy, which the distribution package does
+          # not carry. Podman only looks for it in its libexec directories.
+          curl -fsSL -o /tmp/gvproxy \
+            https://github.com/containers/gvisor-tap-vsock/releases/download/v0.9.0/gvproxy-linux-amd64
+          echo "95c0ee5b5e5d401094ed58ac2f984ba5e935c2cb416c8752329fcfacb721aa9a  /tmp/gvproxy" | sha256sum -c -
+          curl -fsSL -o /tmp/qemu-wrapper \
+            https://github.com/containers/gvisor-tap-vsock/releases/download/v0.9.0/qemu-wrapper
+          echo "638510cded5571417521969f09b29ae5671df06590db6e81c7df165277a3dcb5  /tmp/qemu-wrapper" | sha256sum -c -
+          sudo mkdir -p /usr/libexec/podman
+          sudo install -m 0755 /tmp/gvproxy /usr/libexec/podman/gvproxy
+          sudo install -m 0755 /tmp/qemu-wrapper /usr/libexec/podman/qemu-wrapper
+          # Podman looks for the share helper next to the other helpers, not in
+          # the distribution's own location.
+          sudo apt-get install -y virtiofsd
+          sudo ln -sf /usr/libexec/virtiofsd /usr/libexec/podman/virtiofsd
+
+      # systemd-oomd kills the whole session scope under memory pressure and
+      # with it the chef-client run, which surfaces as an unrelated SIGKILL.
+      - name: Disable systemd-oomd
+        run: |
+          sudo systemctl disable --now systemd-oomd systemd-oomd.socket || true
+          podman --version
+
+      # The suite has to run as root: an unprivileged kitchen would verify
+      # with rootless Podman and see a different store than the one the
+      # root-run converge populated.
+      - name: Test Kitchen
+        env:
+          KITCHEN_LOCAL_YAML: kitchen.exec.yml
+        # `sudo` drops the runner's file descriptor limit to the hard default,
+        # which is too low for Kitchen's per-instance log files.
+        run: |
+          instances=()
+          IFS=',' read -ra suites <<< "${{ matrix.suites }}"
+          for suite in "${suites[@]}"; do
+            [ -z "$suite" ] || [ "$suite" = none ] || instances+=("${suite}-${{ matrix.platform }}")
+          done
+          if [ "${#instances[@]}" -eq 0 ]; then
+            echo "no suites configured"
+            exit 0
+          fi
+          sudo -E bash -c 'ulimit -n 65536; kitchen test "$@"' -- "${instances[@]}"
+
+      - name: Podman journal
+        if: failure()
+        run: |
+          sudo systemctl status podman --no-pager || true
+          sudo journalctl -u podman -u podman.socket --no-pager -n 100 || true
+          sudo dmesg -T | tail -40 || true
+          sudo journalctl -k --no-pager -n 40 || true
+          free -m || true
+          sudo systemctl list-units --type=service --state=running --no-pager || true
+          # The execute manager runs outside systemd, so its daemon output only
+          # exists in its log file.
+          sudo tail -n 50 /var/log/podman*.log || true
+          sudo ls -ld /run/user/* /run/user/*/podman || true
+          loginctl list-users || true
+          sudo -u podman loginctl show-user podman --no-pager || true
+          sudo -u podman systemctl --user --no-pager status || true
+          grep -E '^(podman|chef):' /etc/subuid /etc/subgid || true
+          sudo journalctl -b -u 'user@*.service' -u 'user-runtime-dir@*.service' --no-pager -n 60 || true
+
+  final:
+    needs: [lint-unit, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Complete
+        run: echo "All tests passed"

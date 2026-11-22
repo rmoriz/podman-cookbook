@@ -1,0 +1,16 @@
+/.bundle/
+/.kitchen/
+/.kitchen.yml
+/.vagrant/
+/berks-cookbooks/
+/coverage/
+/doc/
+/pkg/
+/tmp/
+*.gem
+*.log
+.DS_Store
+Policyfile.lock.json
+/docs/
+/plans/
+/nodes/

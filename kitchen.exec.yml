@@ -1,0 +1,21 @@
+---
+driver:
+  name: exec
+  sudo: true
+  chef_omnibus_install: false
+
+transport:
+  name: exec
+
+provisioner:
+  name: chef_infra
+  product_name: <%= ENV['CHEF_PRODUCT_NAME'] || 'cinc' %>
+  product_version: <%= ENV['CHEF_VERSION'] || 'latest' %>
+  enforce_idempotency: true
+  multiple_converge: 2
+  deprecations_as_errors: true
+  install_strategy: skip
+  chef_client_path: /opt/cinc-workstation/bin/chef-client
+
+verifier:
+  name: inspec

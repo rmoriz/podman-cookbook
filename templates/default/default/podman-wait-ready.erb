@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# With TLS material the service rejects plain HTTP even on the socket, so the
+# probe has to hand over the client certificate.
+i=0
+while [ $i -lt <%= @service_timeout * 2 %> ]; do
+<% if @podman_tls_cert %>
+  curl -sk --unix-socket <%= @podman_socket %> --cert <%= @podman_tls_cert %> --key <%= @podman_tls_key %> https://d/_ping -o /dev/null
+<% else %>
+  <%= @podman_bin %> --url=<%= @podman_uri %> info > /dev/null 2>&1
+<% end %>
+  [ $? -eq 0 ] && break
+  ((i++))
+  sleep 0.5
+done
+[ $i -eq <%= @service_timeout * 2 %> ] && exit 1
+exit 0

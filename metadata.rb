@@ -1,0 +1,23 @@
+# frozen_string_literal: true
+
+name              'podman'
+maintainer        'rmoriz'
+maintainer_email  'roland@moriz.de'
+license           'Apache-2.0'
+description       'Installs and manages Podman: containers, images, networks, volumes, pods, kube workloads and systemd units'
+version           '0.1.0'
+source_url        'https://github.com/rmoriz/podman-cookbook'
+issues_url        'https://github.com/rmoriz/podman-cookbook/issues'
+chef_version      '>= 18.0'
+
+supports 'almalinux', '>= 9.0'
+supports 'amazon', '>= 2023.0'
+supports 'centos', '>= 9.0'
+supports 'debian', '>= 12.0'
+supports 'fedora'
+supports 'opensuseleap', '>= 15.6'
+supports 'opensuse'
+supports 'oracle', '>= 9.0'
+supports 'redhat', '>= 9.0'
+supports 'rocky', '>= 9.0'
+supports 'ubuntu', '>= 26.04'

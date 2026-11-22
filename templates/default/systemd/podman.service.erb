@@ -1,0 +1,41 @@
+[Unit]
+Description=Podman API Service (<%= @podman_name %>)
+Documentation=man:podman-system-service(1)
+Requires=<%= @podman_name %>.socket
+After=<%= @podman_name %>.socket network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+<% if @http_proxy %>
+Environment="HTTP_PROXY=<%= @http_proxy %>"
+<% end %>
+<% if @https_proxy %>
+Environment="HTTPS_PROXY=<%= @https_proxy %>"
+<% end %>
+<% if @no_proxy %>
+Environment="NO_PROXY=<%= @no_proxy %>"
+<% end %>
+<% @env_vars.each do |key, value| %>
+Environment="<%= key %>=<%= value %>"
+<% end %>
+<% if @ipv4_forward %>
+ExecStartPre=/sbin/sysctl -w net.ipv4.conf.all.forwarding=1
+<% end %>
+<% if @ipv6_forward %>
+ExecStartPre=/sbin/sysctl -w net.ipv6.conf.all.forwarding=1
+<% end %>
+ExecStart=<%= [@podman_bin, @podman_flags, 'system service --time=0'].reject { |part| part.to_s.empty? }.join(' ') %><%= " --cors=#{@api_cors_header}" if @api_cors_header %><%= " --tls-cert=#{@tls_server_cert}" if @tls_server_cert %><%= " --tls-key=#{@tls_server_key}" if @tls_server_key %><%= " --tls-client-ca=#{@tls_ca_cert}" if @tls_server_cert && @tls_ca_cert %><%= " --log-level=#{@log_level}" if @log_level %>
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutSec=<%= @service_timeout %>
+Restart=always
+RestartSec=2
+Delegate=yes
+KillMode=process
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+<%= @systemd_opts %>
+[Install]
+WantedBy=<%= @user_mode ? 'default.target' : 'multi-user.target' %>
