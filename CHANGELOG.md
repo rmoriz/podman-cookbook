@@ -5,6 +5,27 @@ This file lists changes per release.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.1 (2026-11-23)
+
+### Added
+
+* `annotation` on `podman_container`: OCI annotations as sorted `key=value`
+  pairs, validated as KEY=VALUE, compared as a set, and with the annotations
+  Podman writes itself filtered out on load so a started container does not
+  drift.
+* Documentation for the experimental `krun` microVM runtime, covering
+  prerequisites, registration, microVM sizing through `memory` and
+  `krun.cpus`, passt networking, SELinux volumes and the caveats. The cookbook
+  still installs no OCI runtime.
+
+### Changed
+
+* `podman_pod`: a pod `runtime` applies to the infra container only, containers
+  joined later need their own `runtime`. Podman has no pod-level
+  `--annotation`, so annotations belong on the containers.
+* `podman_machine`: note that `provider_type 'libkrun'` is the libkrun machine
+  provider and unrelated to the `krun` OCI runtime.
+
 ## 0.1.0 (2026-11-22)
 
 Initial release. The cookbook mirrors the public surface of the Sous Chefs
