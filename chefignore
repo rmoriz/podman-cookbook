@@ -107,10 +107,11 @@ documentation/*
 TESTING*
 UPGRADING*
 
-# Local design notes #
-######################
+# Local design notes and chef-zero state #
+#########################################
 docs/*
 plans/*
+nodes/*
 
 # Vagrant #
 ###########
